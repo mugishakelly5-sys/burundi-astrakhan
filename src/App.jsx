@@ -1,3 +1,4 @@
+import { supabase } from './supabase.js'
 import { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext, memo } from "react";
 
 const G="#1EB53A", R="#CE1126", W="#fff", RB="#0039A6", RR="#D52B1E";
@@ -107,7 +108,6 @@ const T={fr:{
 const AppCtx=createContext(null);
 const useApp=()=>useContext(AppCtx);
 
-// ── WAVE FLAG ────────────────────────────────────────────────
 function WaveFlagCanvas({mouseX=0,mouseY=0}){
   const cvs=useRef(null);const animRef=useRef(null);const t=useRef(0);
   useEffect(()=>{
@@ -224,7 +224,6 @@ const MCard=memo(({m,full=false,onDelete,onRole})=>{
   );
 });
 
-// ── ADMIN LOGIN MODAL ────────────────────────────────────────
 const AdminLoginModal=memo(({onClose,onLogin})=>{
   const {th,t}=useApp();
   const [pwd,setPwd]=useState("");const [err,setErr]=useState(false);
@@ -258,21 +257,41 @@ const AdminLoginModal=memo(({onClose,onLogin})=>{
   );
 });
 
-// ── ADMIN DASHBOARD ──────────────────────────────────────────
 const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,setCalls})=>{
   const {th,t,lang}=useApp();
   const [announce,setAnnounce]=useState("");
   const pendingCalls=calls.filter(c=>c.status.includes("attente")||c.status.includes("Ожидает"));
-  const approveCall=id=>setCalls(p=>p.map(c=>c.id===id?{...c,status:"✅ Approuvé"}:c));
-  const rejectCall=id=>setCalls(p=>p.map(c=>c.id===id?{...c,status:"❌ Refusé"}:c));
-  const deletePost=id=>setPosts(p=>p.filter(x=>x.id!==id));
-  const deleteForum=id=>setForum(p=>p.filter(x=>x.id!==id));
-  const removeMember=id=>setMembers(p=>p.filter(m=>m.id!==id));
-  const setRole=(id,role)=>setMembers(p=>p.map(m=>m.id===id?{...m,role}:m));
-  const pinAnnounce=()=>{
+
+  const approveCall=async(id)=>{
+    await supabase.from("calls").update({status:"✅ Approuvé"}).eq("id",id);
+    setCalls(p=>p.map(c=>c.id===id?{...c,status:"✅ Approuvé"}:c));
+  };
+  const rejectCall=async(id)=>{
+    await supabase.from("calls").update({status:"❌ Refusé"}).eq("id",id);
+    setCalls(p=>p.map(c=>c.id===id?{...c,status:"❌ Refusé"}:c));
+  };
+  const deletePost=async(id)=>{
+    await supabase.from("posts").delete().eq("id",id);
+    setPosts(p=>p.filter(x=>x.id!==id));
+  };
+  const deleteForum=async(id)=>{
+    await supabase.from("forum").delete().eq("id",id);
+    setForum(p=>p.filter(x=>x.id!==id));
+  };
+  const removeMember=async(id)=>{
+    await supabase.from("members").delete().eq("id",id);
+    setMembers(p=>p.filter(m=>m.id!==id));
+  };
+  const setRole=async(id,role)=>{
+    await supabase.from("members").update({role}).eq("id",id);
+    setMembers(p=>p.map(m=>m.id===id?{...m,role}:m));
+  };
+  const pinAnnounce=async()=>{
     if(!announce.trim())return;
-    setForum(p=>[{id:Date.now(),author:"Mugisha L. Kelly",text:announce,replies:0,
-      time:lang==="fr"?"À l'instant":"Сейчас",tag:"📌 Annonce officielle",avatar:"MK",color:G,pinned:true},...p]);
+    const newPost={id:Date.now(),author:"Mugisha L. Kelly",text:announce,replies:0,
+      time:lang==="fr"?"À l'instant":"Сейчас",tag:"📌 Annonce officielle",avatar:"MK",color:G,pinned:true};
+    await supabase.from("forum").insert([newPost]);
+    setForum(p=>[newPost,...p]);
     setAnnounce("");
   };
 
@@ -285,7 +304,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
 
   return(
     <div style={{padding:"28px 0"}}>
-      {/* Header */}
       <div style={{background:`linear-gradient(135deg,${G}18,${RB}12)`,border:`1px solid ${G}44`,
         borderRadius:16,padding:"20px 24px",marginBottom:24,display:"flex",alignItems:"center",gap:14}}>
         <div style={{fontSize:44}}>🛡️</div>
@@ -307,7 +325,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
         </div>
       </div>
 
-      {/* Épingler annonce */}
       <Box title={`📢 ${t.adminAnnounce}`}>
         <div style={{display:"flex",gap:8}}>
           <input value={announce} onChange={e=>setAnnounce(e.target.value)}
@@ -321,7 +338,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
         </div>
       </Box>
 
-      {/* Appels en attente */}
       <Box title={`📞 ${t.adminCalls} (${pendingCalls.length})`} color="#f59e0b">
         {pendingCalls.length===0
           ?<div style={{color:th.sub,fontSize:13}}>{t.noCalls}</div>
@@ -346,7 +362,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
           ))}
       </Box>
 
-      {/* Gestion membres */}
       <Box title={`👥 ${t.adminMembers}`}>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {members.filter(m=>!m.isFounder).map(m=>(
@@ -374,7 +389,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
         </div>
       </Box>
 
-      {/* Modération posts */}
       <Box title={`📝 ${t.adminPosts}`} color="#3b82f6">
         {posts.length===0
           ?<div style={{color:th.sub,fontSize:13}}>{lang==="fr"?"Aucun post publié.":"Нет постов."}</div>
@@ -394,7 +408,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
           ))}
       </Box>
 
-      {/* Modération forum */}
       <Box title={`💬 ${lang==="fr"?"Modération forum":"Модерация форума"}`} color="#a855f7">
         {forum.map(p=>(
           <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",
@@ -417,7 +430,6 @@ const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,se
   );
 });
 
-// ── NAVBAR ───────────────────────────────────────────────────
 const Navbar=memo(({sec,setSec,setShowReg,setShowAdminLogin,lang,setLang,thK,setThK,scrolled,isAdmin,onLogout})=>{
   const {th,t}=useApp();
   const [open,setOpen]=useState(false);
@@ -513,7 +525,6 @@ const Navbar=memo(({sec,setSec,setShowReg,setShowAdminLogin,lang,setLang,thK,set
   );
 });
 
-// ── HERO ─────────────────────────────────────────────────────
 const HeroSection=memo(({setSec,setShowReg})=>{
   const {t,lang}=useApp();
   const [mouse,setMouse]=useState({x:0,y:0});
@@ -694,8 +705,14 @@ const HomePage=memo(({members,setSec,setShowReg,counts,pollVotes,setPollVotes,vo
 const DirectoryPage=memo(({members,setMembers,search,setSearch})=>{
   const {th,t,isAdmin}=useApp();
   const filtered=useMemo(()=>members.filter(m=>m.public&&(`${m.firstname} ${m.lastname}`.toLowerCase().includes(search.toLowerCase())||m.university?.toLowerCase().includes(search.toLowerCase())||m.field?.toLowerCase().includes(search.toLowerCase()))),[members,search]);
-  const removeMember=id=>setMembers(p=>p.filter(m=>m.id!==id));
-  const setRole=(id,role)=>setMembers(p=>p.map(m=>m.id===id?{...m,role}:m));
+  const removeMember=async(id)=>{
+    await supabase.from("members").delete().eq("id",id);
+    setMembers(p=>p.filter(m=>m.id!==id));
+  };
+  const setRole=async(id,role)=>{
+    await supabase.from("members").update({role}).eq("id",id);
+    setMembers(p=>p.map(m=>m.id===id?{...m,role}:m));
+  };
   return(
     <div style={{padding:"28px 0"}}>
       <h2 style={{color:G,marginBottom:14}}>{t.dirTitle} ({filtered.length})</h2>
@@ -733,12 +750,32 @@ const UniversitiesPage=memo(({members})=>{
 const MemoriesPage=memo(({posts,setPosts,lang})=>{
   const {th,t,isAdmin}=useApp();
   const [txt,setTxt]=useState("");
-  const react=useCallback((id,type)=>setPosts(prev=>prev.map(p=>{
-    if(p.id!==id)return p;
-    if(type==="moto")return{...p,moto:p.liked?p.moto-1:p.moto+1,liked:!p.liked};
-    if(type==="bika")return{...p,bika:p.bikaed?p.bika-1:p.bika+1,bikaed:!p.bikaed};
-    return{...p,[type]:p[type]+1};
-  })),[setPosts]);
+  const react=useCallback(async(id,type)=>{
+    const p=posts.find(x=>x.id===id);if(!p)return;
+    let update={};
+    if(type==="moto")update={moto:p.liked?p.moto-1:p.moto+1,liked:!p.liked};
+    else if(type==="bika")update={bika:p.bikaed?p.bika-1:p.bika+1,bikaed:!p.bikaed};
+    else update={[type]:p[type]+1};
+    await supabase.from("posts").update(update).eq("id",id);
+    setPosts(prev=>prev.map(x=>x.id===id?{...x,...update}:x));
+  },[posts,setPosts]);
+
+  const addPost=async()=>{
+    if(!txt.trim())return;
+    const emojis=["🌟","🎊","❄️","🌍","🎓","🔥","🌸","💫"];
+    const newPost={id:Date.now(),author:"Mugisha L. Kelly",avatar:"MK",color:G,text:txt,
+      time:lang==="fr"?"À l'instant":"Сейчас",emoji:emojis[posts.length%emojis.length],
+      moto:0,ijwi:0,saba:0,bika:0,liked:false,bikaed:false};
+    await supabase.from("posts").insert([newPost]);
+    setPosts(prev=>[newPost,...prev]);
+    setTxt("");
+  };
+
+  const deletePost=async(id)=>{
+    await supabase.from("posts").delete().eq("id",id);
+    setPosts(prev=>prev.filter(x=>x.id!==id));
+  };
+
   return(
     <div style={{padding:"28px 0"}}>
       <h2 style={{color:G,marginBottom:18}}>{t.memTitle}</h2>
@@ -750,14 +787,14 @@ const MemoriesPage=memo(({posts,setPosts,lang})=>{
         </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12}}>
           <div style={{display:"flex",gap:14,color:th.sub,fontSize:20,cursor:"pointer"}}><span>📸</span><span>🎥</span><span>🎵</span></div>
-          <button onClick={()=>{if(!txt.trim())return;const emojis=["🌟","🎊","❄️","🌍","🎓","🔥","🌸","💫"];setPosts(prev=>[{id:Date.now(),author:"Mugisha L. Kelly",avatar:"MK",color:G,text:txt,time:lang==="fr"?"À l'instant":"Сейчас",emoji:emojis[prev.length%emojis.length],moto:0,ijwi:0,saba:0,bika:0,liked:false,bikaed:false},...prev]);setTxt("");}}
+          <button onClick={addPost}
             style={{background:`linear-gradient(135deg,${G},#15a32b)`,color:W,border:"none",padding:"9px 20px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:13}}>{t.memNew}</button>
         </div>
       </div>
       {posts.length===0&&<div style={{textAlign:"center",padding:"48px",color:th.sub}}><div style={{fontSize:48,marginBottom:14}}>📸</div><div style={{fontSize:15}}>{t.noMemories}</div></div>}
       {posts.map(p=>(
         <div key={p.id} style={{background:th.card,border:`1px solid ${th.bdr}`,borderRadius:16,padding:20,marginBottom:14,position:"relative"}}>
-          {isAdmin&&<button onClick={()=>setPosts(prev=>prev.filter(x=>x.id!==p.id))}
+          {isAdmin&&<button onClick={()=>deletePost(p.id)}
             style={{position:"absolute",top:12,right:12,background:`${R}22`,border:`1px solid ${R}44`,color:R,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:12}}>🗑</button>}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}><Av m={p} size={38}/><div><div style={{fontWeight:700,color:th.tx}}>{p.author}</div><div style={{fontSize:11,color:th.sub}}>{p.time}</div></div><div style={{marginLeft:"auto",fontSize:24,marginRight:isAdmin?32:0}}>{p.emoji}</div></div>
           <div style={{color:th.tx,lineHeight:1.7,marginBottom:14,fontSize:14}}>{p.text}</div>
@@ -798,12 +835,21 @@ const TestimonialsPage=memo(({members})=>{
 const ForumPage=memo(({forum,setForum,lang})=>{
   const {th,t,isAdmin}=useApp();
   const [txt,setTxt]=useState("");
-  const post=useCallback(()=>{
+  const post=useCallback(async()=>{
     if(!txt.trim())return;
     const tags=["💬 Général","📋 Info","💡 Idée","🆘 Aide"];
-    setForum(p=>[{id:Date.now(),author:"Vous",text:txt,replies:0,time:lang==="fr"?"À l'instant":"Сейчас",tag:tags[p.length%tags.length],avatar:"👤",color:"#3b82f6"},...p]);
+    const newPost={id:Date.now(),author:"Vous",text:txt,replies:0,
+      time:lang==="fr"?"À l'instant":"Сейчас",tag:tags[forum.length%tags.length],avatar:"👤",color:"#3b82f6"};
+    await supabase.from("forum").insert([newPost]);
+    setForum(p=>[newPost,...p]);
     setTxt("");
-  },[txt,lang,setForum]);
+  },[txt,lang,forum,setForum]);
+
+  const deletePost=async(id)=>{
+    await supabase.from("forum").delete().eq("id",id);
+    setForum(f=>f.filter(x=>x.id!==id));
+  };
+
   return(
     <div style={{padding:"28px 0"}}>
       <h2 style={{color:G,marginBottom:18}}>{t.forumTitle}</h2>
@@ -814,7 +860,7 @@ const ForumPage=memo(({forum,setForum,lang})=>{
       </div>
       {forum.map(p=>(
         <div key={p.id} style={{background:th.card,border:`1px solid ${p.pinned?G+"55":th.bdr}`,borderRadius:14,padding:"18px 20px",marginBottom:10,position:"relative"}}>
-          {isAdmin&&!p.tag?.includes("📌")&&<button onClick={()=>setForum(f=>f.filter(x=>x.id!==p.id))}
+          {isAdmin&&!p.tag?.includes("📌")&&<button onClick={()=>deletePost(p.id)}
             style={{position:"absolute",top:10,right:10,background:`${R}22`,border:`1px solid ${R}44`,color:R,borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:11}}>🗑</button>}
           {p.pinned&&<div style={{fontSize:10,color:G,marginBottom:6,fontWeight:700}}>📌 {lang==="fr"?"ÉPINGLÉ":"ЗАКРЕПЛЕНО"}</div>}
           <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6,marginBottom:10}}>
@@ -858,11 +904,34 @@ const ChatPage=memo(({members,msgs,setMsgs,calls,setCalls,lang})=>{
   const [callReq,setCallReq]=useState("");const [reactions,setReactions]=useState({});
   const msgEnd=useRef(null);
   useEffect(()=>{msgEnd.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
-  const send=useCallback(()=>{if(!inp.trim())return;setMsgs(p=>[...p,{id:Date.now(),author:"Vous",avatar:"👤",color:"#3b82f6",text:inp,time:"À l'instant",role:""}]);setInp("");},[inp,setMsgs]);
+
+  const send=useCallback(async()=>{
+    if(!inp.trim())return;
+    const newMsg={id:Date.now(),author:"Vous",avatar:"👤",color:"#3b82f6",text:inp,time:"À l'instant",role:""};
+    await supabase.from("messages").insert([newMsg]);
+    setMsgs(p=>[...p,newMsg]);
+    setInp("");
+  },[inp,setMsgs]);
+
   const addReaction=(id,emoji)=>setReactions(r=>({...r,[id]:{...(r[id]||{}),[emoji]:((r[id]||{})[emoji]||0)+1}}));
   const EMOJIS=["👍","❤️","😂","🔥","🙏","🇧🇮"];
-  const approveCall=id=>setCalls(p=>p.map(c=>c.id===id?{...c,status:"✅ Approuvé"}:c));
-  const rejectCall=id=>setCalls(p=>p.map(c=>c.id===id?{...c,status:"❌ Refusé"}:c));
+
+  const approveCall=async(id)=>{
+    await supabase.from("calls").update({status:"✅ Approuvé"}).eq("id",id);
+    setCalls(p=>p.map(c=>c.id===id?{...c,status:"✅ Approuvé"}:c));
+  };
+  const rejectCall=async(id)=>{
+    await supabase.from("calls").update({status:"❌ Refusé"}).eq("id",id);
+    setCalls(p=>p.map(c=>c.id===id?{...c,status:"❌ Refusé"}:c));
+  };
+  const submitCall=async()=>{
+    if(!callReq.trim())return;
+    const newCall={id:Date.now(),req:callReq,status:lang==="fr"?"⏳ En attente":"⏳ Ожидает",time:lang==="fr"?"À l'instant":"Сейчас"};
+    await supabase.from("calls").insert([newCall]);
+    setCalls(p=>[...p,newCall]);
+    setCallReq("");
+  };
+
   return(
     <div style={{padding:"28px 0"}}>
       <h2 style={{color:G,marginBottom:18}}>{t.chatTitle}</h2>
@@ -915,7 +984,7 @@ const ChatPage=memo(({members,msgs,setMsgs,calls,setCalls,lang})=>{
               <div style={{display:"flex",gap:10,marginBottom:20}}>
                 <input value={callReq} onChange={e=>setCallReq(e.target.value)} placeholder={t.callPlaceholder}
                   style={{flex:1,padding:"11px 14px",borderRadius:9,border:`1px solid ${th.bdr}`,background:th.inp,color:th.tx,fontSize:13,boxSizing:"border-box"}}/>
-                <button onClick={()=>{if(!callReq.trim())return;setCalls(p=>[...p,{id:Date.now(),req:callReq,status:lang==="fr"?"⏳ En attente":"⏳ Ожидает",time:lang==="fr"?"À l'instant":"Сейчас"}]);setCallReq("");}}
+                <button onClick={submitCall}
                   style={{background:R,color:W,border:"none",padding:"11px 16px",borderRadius:9,cursor:"pointer",fontWeight:700,fontSize:12}}>{t.chatCallReq}</button>
               </div>
               {calls.length===0&&<div style={{textAlign:"center",padding:"30px",color:th.sub,fontSize:13}}>{t.noCalls}</div>}
@@ -925,7 +994,7 @@ const ChatPage=memo(({members,msgs,setMsgs,calls,setCalls,lang})=>{
                     <div><div style={{fontWeight:600,color:th.tx,fontSize:13}}>{c.req}</div><div style={{fontSize:11,color:th.sub}}>{c.time}</div></div>
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
                       <span style={{background:c.status.includes("✅")?`${G}22`:c.status.includes("❌")?`${R}22`:`rgba(255,200,0,0.15)`,color:c.status.includes("✅")?G:c.status.includes("❌")?R:"#f59e0b",border:`1px solid ${c.status.includes("✅")?G:c.status.includes("❌")?R:"#f59e0b"}33`,padding:"4px 10px",borderRadius:6,fontSize:11}}>{c.status}</span>
-                      {isAdmin&&c.status.includes("attente"||"Ожидает")&&(
+                      {isAdmin&&(c.status.includes("attente")||c.status.includes("Ожидает"))&&(
                         <><button onClick={()=>approveCall(c.id)} style={{background:`${G}22`,border:`1px solid ${G}`,color:G,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontSize:11,fontWeight:700}}>✅</button>
                         <button onClick={()=>rejectCall(c.id)} style={{background:`${R}22`,border:`1px solid ${R}`,color:R,padding:"4px 9px",borderRadius:5,cursor:"pointer",fontSize:11,fontWeight:700}}>❌</button></>
                       )}
@@ -1001,7 +1070,7 @@ const AboutPage=memo(({lang})=>{
       </div>
       <div style={{background:th.card,border:`1px solid ${th.bdr}`,borderRadius:16,padding:"24px 22px"}}>
         <div style={{fontWeight:700,color:G,marginBottom:12,fontSize:16}}>⚙️ {lang==="fr"?"Technologies":"Технологии"}</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>{["React","JavaScript","Canvas API","SVG","Claude AI (Anthropic)","CSS3"].map(tech=><span key={tech} style={{background:`${G}12`,border:`1px solid ${G}28`,color:G,padding:"5px 13px",borderRadius:20,fontSize:12}}>{tech}</span>)}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>{["React","JavaScript","Canvas API","SVG","Claude AI (Anthropic)","CSS3","Supabase"].map(tech=><span key={tech} style={{background:`${G}12`,border:`1px solid ${G}28`,color:G,padding:"5px 13px",borderRadius:20,fontSize:12}}>{tech}</span>)}</div>
         <div style={{fontSize:12,color:th.sub,borderTop:`1px solid ${th.bdr}`,paddingTop:12}}>
           {lang==="fr"?"Initiative, conception & développement : ":"Инициатива, дизайн и разработка: "}
           <span style={{color:G,fontWeight:700}}>Mugisha L. Kelly</span>
@@ -1091,9 +1160,9 @@ export default function App(){
   const [showAdminLogin,setShowAdminLogin]=useState(false);
   const [isAdmin,setIsAdmin]=useState(false);
   const [search,setSearch]=useState("");
-  const [forum,setForum]=useState([{id:1,author:"Mugisha L. Kelly",text:"Bienvenue sur notre forum ! Posez vos questions ici. 🇧🇮",replies:0,time:"Aujourd'hui",tag:"📌 Annonce",avatar:"MK",color:G,pinned:true}]);
+  const [forum,setForum]=useState([]);
   const [posts,setPosts]=useState([]);
-  const [msgs,setMsgs]=useState([{id:1,author:"Mugisha L. Kelly",avatar:"MK",color:G,text:"Bienvenue ! 🇧🇮 Ce chat est notre espace commun. N'hésitez pas à vous présenter !",time:"Aujourd'hui",role:"🌟 Fondateur"}]);
+  const [msgs,setMsgs]=useState([]);
   const [calls,setCalls]=useState([]);
   const [pollVotes,setPollVotes]=useState([2,5,8,3]);
   const [voted,setVoted]=useState(false);
@@ -1102,16 +1171,43 @@ export default function App(){
 
   const th=THEMES[thK],t=T[lang];
 
+  // ── CHARGEMENT INITIAL DEPUIS SUPABASE ──
+  useEffect(()=>{
+    // Membres
+    supabase.from("members").select("*").then(({data})=>{
+      if(data&&data.length>0) setMembers([KELLY,...data]);
+    });
+    // Forum
+    supabase.from("forum").select("*").order("created_at",{ascending:false}).then(({data})=>{
+      if(data) setForum(data.length>0?data:[{id:1,author:"Mugisha L. Kelly",text:"Bienvenue sur notre forum ! Posez vos questions ici. 🇧🇮",replies:0,time:"Aujourd'hui",tag:"📌 Annonce",avatar:"MK",color:G,pinned:true}]);
+    });
+    // Posts
+    supabase.from("posts").select("*").order("created_at",{ascending:false}).then(({data})=>{
+      if(data) setPosts(data);
+    });
+    // Messages
+    supabase.from("messages").select("*").order("created_at",{ascending:true}).then(({data})=>{
+      if(data) setMsgs(data.length>0?data:[{id:1,author:"Mugisha L. Kelly",avatar:"MK",color:G,text:"Bienvenue ! 🇧🇮 Ce chat est notre espace commun. N'hésitez pas à vous présenter !",time:"Aujourd'hui",role:"🌟 Fondateur"}]);
+    });
+    // Appels
+    supabase.from("calls").select("*").order("created_at",{ascending:false}).then(({data})=>{
+      if(data) setCalls(data);
+    });
+  },[]);
+
   useEffect(()=>{const onScroll=()=>setScrolled(window.scrollY>80);window.addEventListener("scroll",onScroll);return()=>window.removeEventListener("scroll",onScroll);},[]);
 
   useEffect(()=>{
     if(sec==="home"){let f=0;const iv=setInterval(()=>{f++;const r=Math.min(f/40,1);setCounts({m:Math.round(members.length*r),y:Math.round(7*r),u:Math.round(UNIVS.length*r),e:Math.round(EVENTS.length*r)});if(f>=40)clearInterval(iv);},25);return()=>clearInterval(iv);}
   },[sec,members.length]);
 
-  const handleRegister=useCallback(form=>{
-    setMembers(p=>[...p,{...form,id:Date.now(),avatar:`${form.firstname[0]}${form.lastname[0]}`.toUpperCase(),color:COLORS[p.length%COLORS.length],role:"",online:false}]);
+  const handleRegister=useCallback(async(form)=>{
+    const newMember={...form,id:Date.now(),avatar:`${form.firstname[0]}${form.lastname[0]}`.toUpperCase(),
+      color:COLORS[members.length%COLORS.length],role:"",online:false,is_founder:false};
+    await supabase.from("members").insert([newMember]);
+    setMembers(p=>[...p,newMember]);
     setShowReg(false);setSec("directory");
-  },[]);
+  },[members.length]);
 
   const ctx=useMemo(()=>({th,t,lang,isAdmin}),[th,t,lang,isAdmin]);
 
