@@ -1242,7 +1242,6 @@ export default function App(){
       role:"",
       online:false,
       is_founder:false,
-      isFounder:false,
     };
     await supabase.from("members").insert([newMember]);
     setMembers(p=>[...p,newMember]);
