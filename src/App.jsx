@@ -190,7 +190,18 @@ function Particles(){
   return <canvas ref={cvs} style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}/>;
 }
 
-const Av=memo(({m,size=40})=>(
+const Av=memo(({m,size=40,onClick=null})=>(
+  <div onClick={onClick} style={{width:size,height:size,borderRadius:"50%",background:m.color,flexShrink:0,
+    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,
+    fontSize:size*0.32,boxShadow:`0 0 12px ${m.color}55`,position:"relative",userSelect:"none",
+    cursor:onClick?"pointer":"default",overflow:"hidden"}}>
+    {m.avatar_url
+      ?<img src={m.avatar_url} alt={m.avatar} style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}}/>
+      :m.avatar}
+    {m.online&&<div style={{position:"absolute",bottom:1,right:1,width:size*0.27,height:size*0.27,
+      borderRadius:"50%",background:"#22c55e",border:"2px solid #000"}}/>}
+  </div>
+));
   <div style={{width:size,height:size,borderRadius:"50%",background:m.color,flexShrink:0,
     display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,
     fontSize:size*0.32,boxShadow:`0 0 12px ${m.color}55`,position:"relative",userSelect:"none"}}>
@@ -449,7 +460,7 @@ const Navbar=memo(({sec,setSec,setShowReg,setShowAdminLogin,lang,setLang,thK,set
   const nav=[
     {k:"home",l:t.navHome},{k:"directory",l:t.navDir},{k:"universities",l:t.navUni},
     {k:"memories",l:t.navMem},{k:"testimonials",l:t.navTest},{k:"forum",l:t.navForum},
-    {k:"events",l:t.navEv},{k:"chat",l:t.navChat},{k:"map",l:t.navMap},{k:"about",l:t.navAbout},
+    {k:"events",l:t.navEv},{k:"chat",l:t.navChat},{k:"map",l:t.navMap},{k:"about",l:t.navAbout},{k:"profile",l:lang==="fr"?"Mon profil":"Профиль"},
   ];
   const go=useCallback(k=>{setSec(k);setOpen(false);},[setSec]);
   return(
@@ -1024,6 +1035,79 @@ const ChatPage=memo(({members,msgs,setMsgs,calls,setCalls,lang})=>{
   );
 });
 
+const ProfilePage=memo(({members,setMembers,currentUser,setCurrentUser})=>{
+  const {th,t,lang}=useApp();
+  const [uploading,setUploading]=useState(false);
+  const fileRef=useRef(null);
+
+  const handleUpload=async(e)=>{
+    const file=e.target.files[0];
+    if(!file||!currentUser)return;
+    setUploading(true);
+    const ext=file.name.split(".").pop();
+    const path=`${currentUser.id}.${ext}`;
+    const {error}=await supabase.storage.from("avatars").upload(path,file,{upsert:true});
+    if(!error){
+      const {data}=supabase.storage.from("avatars").getPublicUrl(path);
+      const url=data.publicUrl;
+      await supabase.from("members").update({avatar_url:url}).eq("id",currentUser.id);
+      const updated={...currentUser,avatar_url:url};
+      setCurrentUser(updated);
+      setMembers(p=>p.map(m=>m.id===currentUser.id?updated:m));
+    }
+    setUploading(false);
+  };
+
+  if(!currentUser)return(
+    <div style={{padding:"80px 20px",textAlign:"center",color:th.sub}}>
+      <div style={{fontSize:48,marginBottom:16}}>👤</div>
+      <div style={{fontSize:16,marginBottom:20}}>{lang==="fr"?"Tu n'es pas encore inscrit.":"Вы ещё не зарегистрированы."}</div>
+    </div>
+  );
+
+  return(
+    <div style={{padding:"28px 0",maxWidth:500,margin:"0 auto"}}>
+      <h2 style={{color:G,marginBottom:24}}>{lang==="fr"?"Mon Profil":"Мой профиль"}</h2>
+      <div style={{background:th.card,border:`1px solid ${th.bdr}`,borderRadius:20,padding:"32px 24px",textAlign:"center",marginBottom:20}}>
+        <div style={{position:"relative",display:"inline-block",marginBottom:20}}>
+          <Av m={currentUser} size={100} onClick={()=>fileRef.current?.click()}/>
+          <div onClick={()=>fileRef.current?.click()}
+            style={{position:"absolute",bottom:0,right:0,background:G,borderRadius:"50%",
+              width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",
+              cursor:"pointer",boxShadow:`0 2px 8px ${G}88`,fontSize:16}}>
+            📷
+          </div>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} style={{display:"none"}}/>
+        {uploading&&<div style={{color:G,fontSize:13,marginBottom:12}}>⏳ {lang==="fr"?"Envoi en cours…":"Загрузка…"}</div>}
+        <div style={{fontWeight:800,fontSize:22,color:th.tx,marginBottom:4}}>{currentUser.firstname} {currentUser.lastname}</div>
+        <div style={{color:G,fontSize:14,marginBottom:4}}>{currentUser.role||lang==="fr"?"Membre":"Участник"}</div>
+        <div style={{color:th.sub,fontSize:13}}>{currentUser.university}</div>
+      </div>
+      <div style={{background:th.card,border:`1px solid ${th.bdr}`,borderRadius:16,padding:"20px 22px"}}>
+        {[
+          {l:lang==="fr"?"Filière":"Специальность",v:currentUser.field},
+          {l:lang==="fr"?"Niveau":"Курс",v:currentUser.year},
+          {l:lang==="fr"?"Arrivée":"Приезд",v:currentUser.arrival},
+          {l:"Email",v:currentUser.email},
+          {l:"WhatsApp",v:currentUser.whatsapp},
+          {l:lang==="fr"?"Compétences":"Навыки",v:currentUser.skills},
+        ].filter(x=>x.v).map((x,i)=>(
+          <div key={i} style={{display:"flex",gap:10,padding:"10px 0",borderBottom:`1px solid ${th.bdr}`}}>
+            <div style={{color:th.sub,fontSize:13,minWidth:100}}>{x.l}</div>
+            <div style={{color:th.tx,fontSize:13,fontWeight:600}}>{x.v}</div>
+          </div>
+        ))}
+        {currentUser.bio&&(
+          <div style={{marginTop:14,padding:14,background:`${G}10`,borderRadius:10,border:`1px solid ${G}22`}}>
+            <div style={{color:th.sub,fontSize:12,marginBottom:6}}>Bio</div>
+            <div style={{color:th.tx,fontSize:13,fontStyle:"italic",lineHeight:1.6}}>{currentUser.bio}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 const MapPage=memo(()=>{
   const {th,t,lang}=useApp();const [hover,setHover]=useState(null);
   const places=[
@@ -1180,6 +1264,7 @@ export default function App(){
   const [calls,setCalls]=useState([]);
   const [pollVotes,setPollVotes]=useState([2,5,8,3]);
   const [voted,setVoted]=useState(false);
+  const [currentUser,setCurrentUser]=useState(null);
   const [counts,setCounts]=useState({m:0,y:0,u:0,e:0});
   const [scrolled,setScrolled]=useState(false);
 
@@ -1245,7 +1330,8 @@ export default function App(){
     };
     await supabase.from("members").insert([newMember]);
     setMembers(p=>[...p,newMember]);
-    setShowReg(false);setSec("directory");
+    setCurrentUser(newMember);
+setShowReg(false);setSec("profile");
   },[members.length]);
 
   const ctx=useMemo(()=>({th,t,lang,isAdmin}),[th,t,lang,isAdmin]);
@@ -1271,6 +1357,7 @@ export default function App(){
             {sec==="chat"&&<ChatPage members={members} msgs={msgs} setMsgs={setMsgs} calls={calls} setCalls={setCalls} lang={lang}/>}
             {sec==="map"&&<MapPage/>}
             {sec==="about"&&<AboutPage lang={lang}/>}
+            {sec==="profile"&&<ProfilePage members={members} setMembers={setMembers} currentUser={currentUser} setCurrentUser={setCurrentUser}/>}
             {sec==="admin"&&isAdmin&&<AdminPage members={members} setMembers={setMembers} forum={forum} setForum={setForum} posts={posts} setPosts={setPosts} calls={calls} setCalls={setCalls}/>}
             {sec==="admin"&&!isAdmin&&<div style={{padding:"80px 20px",textAlign:"center",color:th.sub}}><div style={{fontSize:48,marginBottom:16}}>🔐</div><div style={{fontSize:16}}>{lang==="fr"?"Accès réservé aux administrateurs.":"Доступ только для администраторов."}</div></div>}
           </div>
