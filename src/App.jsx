@@ -202,14 +202,7 @@ const Av=memo(({m,size=40,onClick=null})=>(
       borderRadius:"50%",background:"#22c55e",border:"2px solid #000"}}/>}
   </div>
 ));
-  <div style={{width:size,height:size,borderRadius:"50%",background:m.color,flexShrink:0,
-    display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,
-    fontSize:size*0.32,boxShadow:`0 0 12px ${m.color}55`,position:"relative",userSelect:"none"}}>
-    {m.avatar}
-    {m.online&&<div style={{position:"absolute",bottom:1,right:1,width:size*0.27,height:size*0.27,
-      borderRadius:"50%",background:"#22c55e",border:"2px solid #000"}}/>}
-  </div>
-));
+  
 
 const MCard=memo(({m,full=false,onDelete,onRole})=>{
   const {th,isAdmin,t}=useApp();
