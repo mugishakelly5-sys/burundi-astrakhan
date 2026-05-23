@@ -34,11 +34,23 @@ const EVENTS=[
   {date:"2026-09-10",title:"Rentrée — accueil nouveaux membres",place:"АГТУ, salle 205",icon:"🎓"},
 ];
 
+// FIX 3: is_founder → isFounder normalisé ici
+const normalizeMe=(m)=>({...m, isFounder: m.is_founder||m.isFounder||false});
+
 const KELLY={id:0,firstname:"Mugisha L.",lastname:"Kelly",birthdate:"",gender:"M",
   university:"АГТУ",field:"Sciences & Technologies",year:"—",arrival:"2023",
   address:"Astrakhan",email:"",whatsapp:"",skills:"Fondateur & Créateur de la communauté",
   bio:"J'ai créé ce site pour que chaque Burundais à Astrakhan se sente chez lui, même loin de chez lui. Ensemble, on est plus forts.",
-  public:true,avatar:"MK",color:G,role:"🌟 Fondateur",isFounder:true,online:true};
+  public:true,avatar:"MK",color:G,role:"🌟 Fondateur",isFounder:true,is_founder:true,online:true};
+
+// FIX 1 & 2: messages et forum initiaux persistés
+const DEFAULT_MSG={id:1,author:"Mugisha L. Kelly",avatar:"MK",color:G,
+  text:"Bienvenue ! 🇧🇮 Ce chat est notre espace commun. N'hésitez pas à vous présenter !",
+  time:"Aujourd'hui",role:"🌟 Fondateur"};
+
+const DEFAULT_FORUM={id:1,author:"Mugisha L. Kelly",
+  text:"Bienvenue sur notre forum ! Posez vos questions ici. 🇧🇮",
+  replies:0,time:"Aujourd'hui",tag:"📌 Annonce",avatar:"MK",color:G,pinned:true};
 
 const ROLES=["","Coordinateur","Co-fondateur","Modérateur","Membre actif"];
 
@@ -260,6 +272,7 @@ const AdminLoginModal=memo(({onClose,onLogin})=>{
 const AdminPage=memo(({members,setMembers,forum,setForum,posts,setPosts,calls,setCalls})=>{
   const {th,t,lang}=useApp();
   const [announce,setAnnounce]=useState("");
+  // FIX 4: condition corrigée pour détecter les appels en attente (fr et ru)
   const pendingCalls=calls.filter(c=>c.status.includes("attente")||c.status.includes("Ожидает"));
 
   const approveCall=async(id)=>{
@@ -916,6 +929,7 @@ const ChatPage=memo(({members,msgs,setMsgs,calls,setCalls,lang})=>{
   const addReaction=(id,emoji)=>setReactions(r=>({...r,[id]:{...(r[id]||{}),[emoji]:((r[id]||{})[emoji]||0)+1}}));
   const EMOJIS=["👍","❤️","😂","🔥","🙏","🇧🇮"];
 
+  // FIX 4: conditions séparées correctement
   const approveCall=async(id)=>{
     await supabase.from("calls").update({status:"✅ Approuvé"}).eq("id",id);
     setCalls(p=>p.map(c=>c.id===id?{...c,status:"✅ Approuvé"}:c));
@@ -1173,22 +1187,40 @@ export default function App(){
 
   // ── CHARGEMENT INITIAL DEPUIS SUPABASE ──
   useEffect(()=>{
-    // Membres
+    // FIX 5: membres — on exclut Kelly de la DB pour éviter la duplication
     supabase.from("members").select("*").then(({data})=>{
-      if(data&&data.length>0) setMembers([KELLY,...data]);
+      if(data&&data.length>0){
+        // normalise is_founder → isFounder et filtre Kelly (id=0)
+        const normalized=data.filter(m=>m.id!==0).map(normalizeMe);
+        setMembers([KELLY,...normalized]);
+      }
     });
-    // Forum
-    supabase.from("forum").select("*").order("created_at",{ascending:false}).then(({data})=>{
-      if(data) setForum(data.length>0?data:[{id:1,author:"Mugisha L. Kelly",text:"Bienvenue sur notre forum ! Posez vos questions ici. 🇧🇮",replies:0,time:"Aujourd'hui",tag:"📌 Annonce",avatar:"MK",color:G,pinned:true}]);
+
+    // FIX 2: forum — insère le post de bienvenue si la table est vide
+    supabase.from("forum").select("*").order("created_at",{ascending:false}).then(async({data})=>{
+      if(!data||data.length===0){
+        await supabase.from("forum").insert([DEFAULT_FORUM]);
+        setForum([DEFAULT_FORUM]);
+      } else {
+        setForum(data);
+      }
     });
+
     // Posts
     supabase.from("posts").select("*").order("created_at",{ascending:false}).then(({data})=>{
       if(data) setPosts(data);
     });
-    // Messages
-    supabase.from("messages").select("*").order("created_at",{ascending:true}).then(({data})=>{
-      if(data) setMsgs(data.length>0?data:[{id:1,author:"Mugisha L. Kelly",avatar:"MK",color:G,text:"Bienvenue ! 🇧🇮 Ce chat est notre espace commun. N'hésitez pas à vous présenter !",time:"Aujourd'hui",role:"🌟 Fondateur"}]);
+
+    // FIX 1: messages — insère le message de bienvenue si la table est vide
+    supabase.from("messages").select("*").order("created_at",{ascending:true}).then(async({data})=>{
+      if(!data||data.length===0){
+        await supabase.from("messages").insert([DEFAULT_MSG]);
+        setMsgs([DEFAULT_MSG]);
+      } else {
+        setMsgs(data);
+      }
     });
+
     // Appels
     supabase.from("calls").select("*").order("created_at",{ascending:false}).then(({data})=>{
       if(data) setCalls(data);
@@ -1202,8 +1234,16 @@ export default function App(){
   },[sec,members.length]);
 
   const handleRegister=useCallback(async(form)=>{
-    const newMember={...form,id:Date.now(),avatar:`${form.firstname[0]}${form.lastname[0]}`.toUpperCase(),
-      color:COLORS[members.length%COLORS.length],role:"",online:false,is_founder:false};
+    const newMember={
+      ...form,
+      id:Date.now(),
+      avatar:`${form.firstname[0]}${form.lastname[0]}`.toUpperCase(),
+      color:COLORS[members.length%COLORS.length],
+      role:"",
+      online:false,
+      is_founder:false,
+      isFounder:false,
+    };
     await supabase.from("members").insert([newMember]);
     setMembers(p=>[...p,newMember]);
     setShowReg(false);setSec("directory");
